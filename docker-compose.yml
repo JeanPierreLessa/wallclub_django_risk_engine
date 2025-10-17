@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  riskengine:
+    build: .
+    container_name: wallclub-riskengine
+    ports:
+      - "8004:8004"
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-change-in-production}
+      - DB_NAME=${DB_NAME:-wallclub}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - CALLBACK_URL_PRINCIPAL=${CALLBACK_URL_PRINCIPAL:-http://wallclub-prod-release300:8000}
+      - NOTIFICACAO_EMAIL=${NOTIFICACAO_EMAIL:-admin@wallclub.com.br}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:8003}
+      - TZ=America/Sao_Paulo
+    networks:
+      - wallclub-network
+    restart: always
+    depends_on:
+      - mysql
+      - redis
+    mem_limit: 512m
+    cpus: 0.5
+
+networks:
+  wallclub-network:
+    external: true
