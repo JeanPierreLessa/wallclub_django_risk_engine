@@ -138,8 +138,7 @@ NOTIFICACAO_EMAIL = os.environ.get('NOTIFICACAO_EMAIL', 'admin@wallclub.com.br')
 SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL', '')
 
 # MaxMind minFraud (Semana 9) - Lê do AWS Secrets Manager
-from comum.utilitarios.config_manager import get_config_manager
-_maxmind_config = get_config_manager().get_maxmind_config()
+_maxmind_config = config_manager.get_maxmind_config()
 MAXMIND_ACCOUNT_ID = _maxmind_config.get('account_id')
 MAXMIND_LICENSE_KEY = _maxmind_config.get('license_key')
 
