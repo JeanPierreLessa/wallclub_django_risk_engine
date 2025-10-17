@@ -137,9 +137,11 @@ CALLBACK_URL_PRINCIPAL = os.environ.get('CALLBACK_URL_PRINCIPAL', 'http://wallcl
 NOTIFICACAO_EMAIL = os.environ.get('NOTIFICACAO_EMAIL', 'admin@wallclub.com.br')
 SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL', '')
 
-# MaxMind minFraud (Semana 9)
-MAXMIND_ACCOUNT_ID = os.environ.get('MAXMIND_ACCOUNT_ID', None)
-MAXMIND_LICENSE_KEY = os.environ.get('MAXMIND_LICENSE_KEY', None)
+# MaxMind minFraud (Semana 9) - Lê do AWS Secrets Manager
+from comum.utilitarios.config_manager import get_config_manager
+_maxmind_config = get_config_manager().get_maxmind_config()
+MAXMIND_ACCOUNT_ID = _maxmind_config.get('account_id')
+MAXMIND_LICENSE_KEY = _maxmind_config.get('license_key')
 
 # 3D Secure 2.0 (Semana 13)
 THREEDS_ENABLED = os.environ.get('THREEDS_ENABLED', 'False') == 'True'

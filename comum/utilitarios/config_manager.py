@@ -97,6 +97,31 @@ class ConfigManager:
         except Exception as e:
             print(f"Erro ao buscar config do banco: {e}")
             return {}
+    
+    def get_maxmind_config(self) -> Dict[str, Any]:
+        """
+        Obtém configurações do MaxMind do AWS Secret
+        
+        Returns:
+            Dict com account_id e license_key, ou valores None se não encontrados
+        """
+        try:
+            secret_string = self.get_secret(self._get_secret_name())
+            if not secret_string:
+                return {'account_id': None, 'license_key': None}
+                
+            secrets = json.loads(secret_string)
+            
+            config = {
+                'account_id': secrets.get('MAXMIND_ACCOUNT_ID'),
+                'license_key': secrets.get('MAXMIND_LICENSE_KEY'),
+            }
+            
+            return config
+            
+        except Exception as e:
+            print(f"Erro ao buscar config MaxMind: {e}")
+            return {'account_id': None, 'license_key': None}
 
 
 # Instância global

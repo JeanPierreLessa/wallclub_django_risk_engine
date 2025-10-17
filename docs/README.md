@@ -285,9 +285,11 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=1
 
-# MaxMind minFraud
-MAXMIND_ACCOUNT_ID=your_account_id
-MAXMIND_LICENSE_KEY=your_license_key
+# MaxMind minFraud - ⚠️ NÃO CONFIGURAR AQUI
+# Credenciais são lidas automaticamente do AWS Secrets Manager
+# Adicione no secret 'wall/prod/db' as chaves:
+#   - MAXMIND_ACCOUNT_ID
+#   - MAXMIND_LICENSE_KEY
 
 # 3D Secure 2.0 (opcional)
 THREEDS_ENABLED=False
