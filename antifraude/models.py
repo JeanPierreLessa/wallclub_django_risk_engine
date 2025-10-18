@@ -209,6 +209,129 @@ class BlacklistAntifraude(models.Model):
         return f"{status}{permanencia} {self.tipo}: {self.valor}"
 
 
+class BloqueioSeguranca(models.Model):
+    """
+    Bloqueios de segurança para IPs e CPFs suspeitos
+    Sistema de Atividades Suspeitas - Semana 23
+    """
+    
+    # Tipo de Bloqueio
+    tipo = models.CharField(max_length=10, choices=[
+        ('ip', 'IP Bloqueado'),
+        ('cpf', 'CPF Bloqueado')
+    ], db_index=True)
+    
+    # Valor Bloqueado
+    valor = models.CharField(max_length=50, db_index=True, help_text="IP ou CPF bloqueado")
+    
+    # Contexto
+    motivo = models.TextField(help_text="Motivo do bloqueio")
+    bloqueado_por = models.CharField(max_length=100, help_text="Usuário ou sistema que bloqueou")
+    portal = models.CharField(max_length=50, null=True, blank=True, help_text="Portal relacionado ao bloqueio")
+    
+    # Detalhes Adicionais
+    detalhes = models.JSONField(null=True, blank=True, help_text="Informações adicionais (IPs, tentativas, etc)")
+    
+    # Controle
+    ativo = models.BooleanField(default=True, db_index=True)
+    bloqueado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    desbloqueado_em = models.DateTimeField(null=True, blank=True)
+    desbloqueado_por = models.CharField(max_length=100, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'antifraude_bloqueio_seguranca'
+        verbose_name = 'Bloqueio de Segurança'
+        verbose_name_plural = 'Bloqueios de Segurança'
+        ordering = ['-bloqueado_em']
+        unique_together = [['tipo', 'valor']]
+        indexes = [
+            models.Index(fields=['tipo', 'valor', 'ativo']),
+            models.Index(fields=['ativo', 'bloqueado_em']),
+        ]
+    
+    def __str__(self):
+        status = "🔴" if self.ativo else "🟢"
+        return f"{status} {self.tipo.upper()}: {self.valor}"
+
+
+class AtividadeSuspeita(models.Model):
+    """
+    Registro de atividades suspeitas detectadas automaticamente
+    Sistema de Atividades Suspeitas - Semana 23
+    """
+    
+    # Tipo de Atividade
+    TIPO_CHOICES = [
+        ('login_multiplo', 'Múltiplos Logins'),
+        ('tentativas_falhas', 'Tentativas Falhas'),
+        ('ip_novo', 'IP Novo'),
+        ('horario_suspeito', 'Horário Suspeito'),
+        ('velocidade_transacao', 'Velocidade Anormal de Transações'),
+        ('localizacao_anomala', 'Localização Anômala'),
+    ]
+    
+    tipo = models.CharField(max_length=30, choices=TIPO_CHOICES, db_index=True)
+    
+    # Dados da Atividade
+    cpf = models.CharField(max_length=11, db_index=True, help_text="CPF relacionado")
+    ip = models.CharField(max_length=45, db_index=True, help_text="IP de origem")
+    portal = models.CharField(max_length=50, help_text="Portal onde ocorreu (admin, lojista, vendas, app)")
+    
+    # Detalhes
+    detalhes = models.JSONField(help_text="Detalhes da atividade (IPs, tentativas, horários, etc)")
+    severidade = models.IntegerField(default=1, help_text="Nível de severidade 1-5 (5=crítico)")
+    
+    # Status
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente'),
+        ('investigado', 'Investigado'),
+        ('bloqueado', 'Bloqueado'),
+        ('falso_positivo', 'Falso Positivo'),
+        ('ignorado', 'Ignorado'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente', db_index=True)
+    
+    # Análise
+    detectado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    analisado_em = models.DateTimeField(null=True, blank=True)
+    analisado_por = models.IntegerField(null=True, blank=True, help_text="ID do usuário que analisou")
+    observacoes = models.TextField(null=True, blank=True)
+    
+    # Ação Tomada
+    acao_tomada = models.CharField(max_length=50, null=True, blank=True, help_text="Ação tomada (bloqueio_ip, bloqueio_cpf, etc)")
+    bloqueio_relacionado = models.ForeignKey(
+        'BloqueioSeguranca', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='atividades'
+    )
+    
+    class Meta:
+        db_table = 'antifraude_atividade_suspeita'
+        verbose_name = 'Atividade Suspeita'
+        verbose_name_plural = 'Atividades Suspeitas'
+        ordering = ['-detectado_em']
+        indexes = [
+            models.Index(fields=['status', 'detectado_em']),
+            models.Index(fields=['tipo', 'detectado_em']),
+            models.Index(fields=['cpf', 'detectado_em']),
+            models.Index(fields=['ip', 'detectado_em']),
+            models.Index(fields=['portal', 'status']),
+        ]
+    
+    def __str__(self):
+        status_emoji = {
+            'pendente': '⏳',
+            'investigado': '🔍',
+            'bloqueado': '🔴',
+            'falso_positivo': '✅',
+            'ignorado': '⚪',
+        }.get(self.status, '❓')
+        tipo_label = dict(self.TIPO_CHOICES).get(self.tipo, self.tipo)
+        return f"{status_emoji} {tipo_label} - CPF: {self.cpf[:3]}***"
+
+
 class WhitelistAntifraude(models.Model):
     """
     Lista branca de CPFs, IPs confiáveis

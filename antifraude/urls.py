@@ -2,7 +2,7 @@
 URLs do Sistema Antifraude
 """
 from django.urls import path
-from . import views, views_revisao, views_teste, views_api
+from . import views, views_revisao, views_teste, views_api, views_seguranca
 
 urlpatterns = [
     # API REST Pública (Semana 13)
@@ -27,4 +27,11 @@ urlpatterns = [
     path('teste/normalizar/', views_teste.testar_normalizacao, name='teste_normalizacao'),
     path('teste/bin/', views_teste.testar_extracao_bin, name='teste_bin'),
     path('teste/exemplos/', views_teste.exemplo_payloads, name='teste_exemplos'),
+    
+    # APIs de Segurança (Semana 23)
+    path('validate-login/', views_seguranca.validate_login, name='seguranca_validate_login'),
+    path('suspicious/', views_seguranca.list_suspicious, name='seguranca_list_suspicious'),
+    path('block/', views_seguranca.create_block, name='seguranca_create_block'),
+    path('investigate/', views_seguranca.investigate_activity, name='seguranca_investigate'),
+    path('blocks/', views_seguranca.list_blocks, name='seguranca_list_blocks'),
 ]
