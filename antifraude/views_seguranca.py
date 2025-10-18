@@ -11,14 +11,12 @@ import json
 import logging
 
 from .models import BloqueioSeguranca, AtividadeSuspeita
-from comum.oauth.decorators import require_oauth
 
 logger = logging.getLogger('antifraude.seguranca')
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@require_oauth(context='apps')
 def validate_login(request):
     """
     API 1: Valida se IP ou CPF está bloqueado
@@ -107,7 +105,6 @@ def validate_login(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@require_oauth(context='apps')
 def list_suspicious(request):
     """
     API 2: Lista atividades suspeitas com filtros
@@ -195,7 +192,6 @@ def list_suspicious(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@require_oauth(context='apps')
 def create_block(request):
     """
     API 3: Cria bloqueio manual
@@ -272,7 +268,6 @@ def create_block(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@require_oauth(context='apps')
 def investigate_activity(request):
     """
     API 4: Investiga/age sobre atividade suspeita
@@ -391,7 +386,6 @@ def investigate_activity(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@require_oauth(context='apps')
 def list_blocks(request):
     """
     API 5 (EXTRA): Lista bloqueios com filtros
