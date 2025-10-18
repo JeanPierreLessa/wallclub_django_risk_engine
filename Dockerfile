@@ -27,8 +27,14 @@ COPY . .
 # Coletar arquivos estáticos
 RUN python manage.py collectstatic --noinput || true
 
+# Criar diretório de logs
+RUN mkdir -p /app/logs
+
+# Copiar configuração do supervisor
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
 # Expor porta
 EXPOSE 8004
 
-# Comando de inicialização
-CMD ["gunicorn", "--bind", "0.0.0.0:8004", "--workers", "2", "--timeout", "120", "riskengine.wsgi:application"]
+# Comando de inicialização - usa supervisor para rodar Gunicorn + Celery
+CMD ["/usr/local/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
