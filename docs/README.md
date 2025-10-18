@@ -2,8 +2,9 @@
 
 **Sistema de análise antifraude em tempo real para fintech - Container Django isolado**
 
-**Versão:** 1.0  
-**Status:** ✅ Operacional em produção desde 16/10/2025
+**Versão:** 1.1  
+**Status:** ✅ Operacional em produção desde 16/10/2025  
+**Última atualização:** 18/10/2025 (Sistema de Segurança Multi-Portal)
 
 ---
 
@@ -19,6 +20,9 @@ O **WallClub Risk Engine** é um sistema independente de análise de risco que o
 - ✅ 3D Secure 2.0 support
 - ✅ Normalização automática de dados (POS/APP/WEB)
 - ✅ Portal Admin com revisão manual
+- ✅ Sistema de Segurança Multi-Portal (Bloqueios + Atividades Suspeitas)
+- ✅ Celery Tasks com 6 detectores automáticos
+- ✅ Middleware de validação de login em tempo real
 - ✅ Fail-open em caso de erro (segurança operacional)
 
 ---
@@ -162,6 +166,37 @@ Score final (0-100)
 - `/admin/antifraude/pendentes/` - Lista pendentes
 - `/admin/antifraude/historico/` - Histórico
 
+### Sistema de Segurança Multi-Portal ✅ (Fase 4 - Semana 23)
+**Arquivos:** 
+- Risk Engine: `antifraude/views_seguranca.py`, `antifraude/tasks.py`
+- Django: `comum/middleware/security_validation.py`, `portais/admin/views_seguranca.py`
+
+**Funcionalidades:**
+
+#### Detectores Automáticos (Celery - a cada 5min):
+1. **Login Múltiplo** - Mesmo CPF em 3+ IPs diferentes
+2. **Tentativas Falhas** - 5+ reprovações em 5min (bloqueio automático)
+3. **IP Novo** - CPF usando IP nunca visto
+4. **Horário Suspeito** - Transações 02:00-05:00 AM
+5. **Velocidade Transação** - 10+ transações em 5min
+6. **Localização Anômala** - Preparado para MaxMind
+
+#### Middleware de Validação:
+- Intercepta logins em todos portais (admin, lojista, vendas)
+- Valida IP/CPF com Risk Engine antes de permitir acesso
+- Fail-open: permite acesso em caso de erro do Risk Engine
+
+#### Telas de Gerenciamento:
+- **Atividades Suspeitas** (`/admin/seguranca/atividades/`)
+  - Dashboard com estatísticas
+  - Filtros: status, tipo, portal, período
+  - Investigar e tomar ações (bloquear IP/CPF, falso positivo)
+  
+- **Bloqueios** (`/admin/seguranca/bloqueios/`)
+  - Criar bloqueio manual de IP ou CPF
+  - Listar histórico de bloqueios
+  - Desbloquear IPs/CPFs
+
 ---
 
 ## 📡 API REST
@@ -260,6 +295,76 @@ Health check do serviço
   }
 }
 ```
+
+### Endpoints de Segurança (Semana 23)
+
+#### POST /api/antifraude/validate-login/
+Valida se IP ou CPF está bloqueado
+
+**Request:**
+```json
+{
+  "ip": "192.168.1.100",
+  "cpf": "12345678901",
+  "portal": "admin"
+}
+```
+
+**Response:**
+```json
+{
+  "permitido": false,
+  "bloqueado": true,
+  "tipo": "ip",
+  "motivo": "Tentativas de ataque",
+  "bloqueio_id": 123,
+  "portal": "admin"
+}
+```
+
+#### GET /api/antifraude/suspicious/
+Lista atividades suspeitas
+
+**Query params:** `status`, `tipo`, `portal`, `dias`, `limit`
+
+**Response:**
+```json
+{
+  "success": true,
+  "total": 45,
+  "pendentes": 12,
+  "atividades": [...]
+}
+```
+
+#### POST /api/antifraude/block/
+Cria bloqueio manual
+
+**Request:**
+```json
+{
+  "tipo": "ip",
+  "valor": "192.168.1.100",
+  "motivo": "Tentativas de ataque",
+  "bloqueado_por": "admin_joao",
+  "portal": "admin"
+}
+```
+
+#### POST /api/antifraude/investigate/
+Investiga atividade e toma ação
+
+**Ações disponíveis:**
+- `marcar_investigado`
+- `bloquear_ip`
+- `bloquear_cpf`
+- `falso_positivo`
+- `ignorar`
+
+#### GET /api/antifraude/blocks/
+Lista bloqueios ativos e inativos
+
+**Query params:** `tipo`, `ativo`, `dias`
 
 ---
 
@@ -480,6 +585,48 @@ resources:
 
 ---
 
+## 🤖 Celery Tasks
+
+### Workers e Scheduler
+
+**Iniciar Worker:**
+```bash
+celery -A riskengine worker --loglevel=info
+```
+
+**Iniciar Beat Scheduler:**
+```bash
+celery -A riskengine beat --loglevel=info
+```
+
+### Tasks Agendadas
+
+**detectar_atividades_suspeitas()**
+- **Schedule:** A cada 5 minutos
+- **Função:** Executa 6 detectores automáticos
+- **Output:** Cria registros em AtividadeSuspeita
+
+**bloquear_automatico_critico()**
+- **Schedule:** A cada 10 minutos
+- **Função:** Bloqueia IPs com atividades de severidade 5 (crítico)
+- **Output:** Cria bloqueios automáticos
+
+### Supervisor (Produção)
+
+```ini
+[program:celery-worker]
+command=celery -A riskengine worker --loglevel=info
+autostart=true
+autorestart=true
+
+[program:celery-beat]
+command=celery -A riskengine beat --loglevel=info
+autostart=true
+autorestart=true
+```
+
+---
+
 ## 📊 Monitoramento
 
 ### Logs
@@ -493,6 +640,9 @@ docker exec wallclub-riskengine tail -f logs/antifraude.log
 
 # Apenas MaxMind
 docker logs wallclub-riskengine | grep maxmind
+
+# Celery tasks
+docker logs wallclub-riskengine | grep celery
 ```
 
 ### Métricas Sugeridas
@@ -632,22 +782,30 @@ docker exec wallclub-riskengine python manage.py shell
 
 ## 📝 Status do Projeto
 
-**Versão atual:** 1.0  
+**Versão atual:** 1.1  
 **Data de lançamento:** 16/10/2025  
+**Última atualização:** 18/10/2025 (Sistema de Segurança Multi-Portal)  
 **Status:** ✅ Operacional em produção  
 
 **Integrações ativas:**
 - ✅ POSP2 (Terminal POS)
 - ✅ Checkout Web
-- ✅ Portal Admin (revisão manual)
+- ✅ Portal Admin (revisão manual + segurança)
 - ✅ OAuth 2.0 entre containers
 - ✅ MaxMind minFraud (credenciais ativas)
+- ✅ Sistema de Segurança Multi-Portal
+  - ✅ Middleware de validação de login
+  - ✅ 6 detectores automáticos (Celery)
+  - ✅ Telas de gerenciamento (Atividades + Bloqueios)
+  - ✅ APIs REST de segurança
 - ⏳ 3D Secure (configuração pendente)
 
-**Próximas integrações:**
-- [ ] Apps Mobile
-- [ ] Testes E2E completos
-- [ ] Dashboard de métricas
+**Próximas evoluções:**
+- [ ] Apps Mobile integrados
+- [ ] Machine Learning para detecção de fraude
+- [ ] Dashboard de métricas em tempo real
+- [ ] Notificações (Email/Slack) para eventos críticos
+- [ ] Integração MaxMind GeoIP para localização anômala
 
 ---
 

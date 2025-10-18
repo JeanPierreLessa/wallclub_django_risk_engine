@@ -1,8 +1,8 @@
 # WALLCLUB RISK ENGINE - DIRETRIZES DE DESENVOLVIMENTO
 
-**Versão:** 1.0  
-**Data:** 16/10/2025  
-**Status:** Container isolado operacional em produção
+**Versão:** 1.1  
+**Data:** 18/10/2025  
+**Status:** Container isolado + Sistema de Segurança Multi-Portal operacional em produção
 
 ---
 
@@ -45,6 +45,7 @@ wallclub-riskengine/
 │   └── wsgi.py
 ├── antifraude/                # Sistema antifraude
 │   ├── models.py              # TransacaoRisco, RegraAntifraude, DecisaoAntifraude
+│   │                          # BloqueioSeguranca, AtividadeSuspeita (Semana 23)
 │   ├── services.py            # AnaliseRiscoService (5 regras básicas)
 │   ├── services_coleta.py     # ColetaDadosService (normalização POS/APP/WEB)
 │   ├── services_maxmind.py    # MaxMindService (score externo + cache)
@@ -52,7 +53,9 @@ wallclub-riskengine/
 │   ├── services_notificacao.py # NotificacaoService (Email + Slack)
 │   ├── views.py               # Views legadas (manter compatibilidade)
 │   ├── views_api.py           # API REST pública (POST /analyze/)
+│   ├── views_seguranca.py     # APIs segurança (validate-login, suspicious, blocks)
 │   ├── views_teste.py         # Endpoints de teste/debug
+│   ├── tasks.py               # Celery tasks (detectores automáticos)
 │   └── urls.py                # Rotas antifraude
 ├── comum/                     # Módulos compartilhados
 │   └── oauth/                 # Sistema OAuth 2.0
@@ -61,10 +64,13 @@ wallclub-riskengine/
 │       ├── services.py        # OAuthService
 │       └── urls.py            # Rotas OAuth
 ├── docs/                      # Documentação técnica
+│   ├── README.md              # Overview completo do sistema
+│   ├── DIRETRIZES.md          # Este arquivo
 │   ├── engine_antifraude.md   # Funcionamento do motor
 │   ├── semana_8_coleta_dados.md
 │   ├── semana_9_maxmind.md
-│   └── semana_13_3ds_api.md
+│   ├── semana_13_3ds_api.md
+│   └── semana_23_atividades_suspeitas.md
 ├── scripts/                   # Scripts utilitários
 │   ├── testar_maxmind_producao.py
 │   └── seed_regras_antifraude.py
@@ -73,6 +79,122 @@ wallclub-riskengine/
 ├── requirements.txt
 └── manage.py
 ```
+
+---
+
+## 🛡️ SISTEMA DE SEGURANÇA MULTI-PORTAL
+
+### 1. Arquitetura de Segurança (Semana 23)
+
+**Objetivo:** Detectar, monitorar e bloquear atividades suspeitas em tempo real.
+
+**Componentes:**
+- **Risk Engine:** Análise e armazenamento de eventos
+- **Django WallClub:** Middleware de validação + Portal Admin
+- **Celery:** Detectores automáticos executados periodicamente
+
+### 2. Models de Segurança
+
+#### BloqueioSeguranca
+```python
+class BloqueioSeguranca(models.Model):
+    tipo = models.CharField(max_length=10)  # 'ip' ou 'cpf'
+    valor = models.CharField(max_length=100)
+    motivo = models.TextField()
+    bloqueado_por = models.CharField(max_length=100)
+    portal = models.CharField(max_length=50)  # 'admin', 'lojista', 'vendas'
+    detalhes = models.JSONField()
+    ativo = models.BooleanField(default=True)
+    bloqueado_em = models.DateTimeField(auto_now_add=True)
+    desbloqueado_em = models.DateTimeField(null=True)
+```
+
+#### AtividadeSuspeita
+```python
+class AtividadeSuspeita(models.Model):
+    tipo = models.CharField(max_length=50)  # 'login_multiplo', 'tentativas_falhas', etc
+    cpf = models.CharField(max_length=11)
+    ip = models.CharField(max_length=45)
+    portal = models.CharField(max_length=50)
+    detalhes = models.JSONField()
+    severidade = models.IntegerField()  # 1-5
+    status = models.CharField(max_length=20)  # 'pendente', 'investigado', etc
+    detectado_em = models.DateTimeField(auto_now_add=True)
+    bloqueio_relacionado = models.ForeignKey(BloqueioSeguranca, null=True)
+```
+
+### 3. APIs de Segurança
+
+**POST /api/antifraude/validate-login/**
+- Valida se IP ou CPF está bloqueado antes do login
+- Fail-open: permite acesso em caso de erro
+
+**GET /api/antifraude/suspicious/**
+- Lista atividades suspeitas com filtros
+- Paginação e ordenação
+
+**POST /api/antifraude/block/**
+- Cria bloqueio manual de IP ou CPF
+
+**POST /api/antifraude/investigate/**
+- Investiga atividade e toma ações (bloquear, ignorar, falso positivo)
+
+**GET /api/antifraude/blocks/**
+- Lista bloqueios ativos e inativos
+
+### 4. Detectores Automáticos (Celery)
+
+**Task: detectar_atividades_suspeitas()** (a cada 5min)
+
+1. **Login Múltiplo** (Severidade 4)
+   - Mesmo CPF em 3+ IPs diferentes em 10 minutos
+
+2. **Tentativas Falhas** (Severidade 5 - Crítico)
+   - 5+ transações reprovadas do mesmo IP em 5 minutos
+   - Bloqueio automático ativado
+
+3. **IP Novo** (Severidade 3)
+   - CPF usando IP nunca visto no histórico
+
+4. **Horário Suspeito** (Severidade 2)
+   - Transações entre 02:00-05:00 AM
+
+5. **Velocidade Transação** (Severidade 4)
+   - 10+ transações do mesmo CPF em 5 minutos
+
+6. **Localização Anômala** (Preparado)
+   - IP de país diferente em menos de 1 hora
+
+**Task: bloquear_automatico_critico()** (a cada 10min)
+- Bloqueia automaticamente IPs com atividades de severidade 5
+
+### 5. Middleware de Validação (Django)
+
+**SecurityValidationMiddleware** intercepta:
+- `/oauth/token/`
+- `/admin/login/`
+- `/lojista/login/`
+- `/vendas/login/`
+- `/api/login/`
+
+**Fluxo:**
+1. Extrai IP e CPF do request
+2. Chama API validate-login
+3. Se bloqueado → HTTP 403
+4. Se permitido → continua
+5. Fail-open em erros
+
+### 6. Portal Admin - Telas de Segurança
+
+**Atividades Suspeitas** (`/admin/seguranca/atividades/`)
+- Dashboard com estatísticas
+- Filtros (status, tipo, portal, período)
+- Modal de investigação com ações
+
+**Bloqueios** (`/admin/seguranca/bloqueios/`)
+- Criar bloqueio manual
+- Listar histórico
+- Desbloquear IPs/CPFs
 
 ---
 
@@ -452,6 +574,55 @@ Response:
 
 ---
 
+## 🤖 CELERY E TASKS
+
+### 1. Configuração Celery
+
+**Arquivo:** `riskengine/celery.py`
+
+```python
+from celery import Celery
+from celery.schedules import crontab
+
+app = Celery('riskengine')
+app.config_from_object('django.conf:settings', namespace='CELERY')
+app.autodiscover_tasks()
+
+app.conf.beat_schedule = {
+    'detectar-atividades-suspeitas': {
+        'task': 'antifraude.tasks.detectar_atividades_suspeitas',
+        'schedule': 300.0,  # 5 minutos
+    },
+    'bloquear-automatico-critico': {
+        'task': 'antifraude.tasks.bloquear_automatico_critico',
+        'schedule': 600.0,  # 10 minutos
+    },
+}
+```
+
+### 2. Iniciar Workers
+
+**Worker:**
+```bash
+celery -A riskengine worker --loglevel=info
+```
+
+**Beat Scheduler:**
+```bash
+celery -A riskengine beat --loglevel=info
+```
+
+**Supervisor (Produção):**
+```ini
+[program:celery-worker]
+command=celery -A riskengine worker --loglevel=info
+
+[program:celery-beat]
+command=celery -A riskengine beat --loglevel=info
+```
+
+---
+
 ## 🚀 DEPLOY
 
 ### 1. Variáveis de Ambiente
@@ -657,5 +828,6 @@ docker exec wallclub-riskengine mysql -h mysql -u root -p -e "SHOW PROCESSLIST;"
 ---
 
 **Documentação:** `/docs/`  
-**Data:** 16/10/2025  
+**Última atualização:** 18/10/2025  
+**Versão:** 1.1 (com Sistema de Segurança Multi-Portal)  
 **Responsável:** Jean Lessa + Claude AI
