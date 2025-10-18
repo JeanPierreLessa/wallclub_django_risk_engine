@@ -7,7 +7,10 @@ from django.views.decorators.http import require_http_methods
 from django.db import connection
 import secrets
 import hashlib
+import logging
 from datetime import datetime, timedelta
+
+logger = logging.getLogger('oauth')
 
 
 @csrf_exempt
@@ -33,15 +36,19 @@ def token(request):
     try:
         # Extrair credenciais (aceita form-data ou JSON)
         import json
+        logger.info(f"OAuth token request - Content-Type: {request.content_type}")
+        
         if request.content_type == 'application/json':
             data = json.loads(request.body)
             grant_type = data.get('grant_type')
             client_id = data.get('client_id')
             client_secret = data.get('client_secret')
+            logger.info(f"JSON request - client_id: {client_id}")
         else:
             grant_type = request.POST.get('grant_type')
             client_id = request.POST.get('client_id')
             client_secret = request.POST.get('client_secret')
+            logger.info(f"Form request - client_id: {client_id}")
         
         # Validar grant_type
         if grant_type != 'client_credentials':
@@ -104,6 +111,7 @@ def token(request):
         })
         
     except Exception as e:
+        logger.error(f"OAuth error: {str(e)}", exc_info=True)
         return JsonResponse({
             'error': 'server_error',
             'error_description': str(e)
