@@ -31,10 +31,17 @@ def token(request):
     }
     """
     try:
-        # Extrair credenciais
-        grant_type = request.POST.get('grant_type')
-        client_id = request.POST.get('client_id')
-        client_secret = request.POST.get('client_secret')
+        # Extrair credenciais (aceita form-data ou JSON)
+        import json
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+            grant_type = data.get('grant_type')
+            client_id = data.get('client_id')
+            client_secret = data.get('client_secret')
+        else:
+            grant_type = request.POST.get('grant_type')
+            client_id = request.POST.get('client_id')
+            client_secret = request.POST.get('client_secret')
         
         # Validar grant_type
         if grant_type != 'client_credentials':
