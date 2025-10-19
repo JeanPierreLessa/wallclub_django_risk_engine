@@ -63,29 +63,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'riskengine.wsgi.application'
 
 # Database (MySQL compartilhado com app principal via AWS Secrets)
+# OBRIGATÓRIO: Credenciais devem vir do AWS Secrets Manager
+# Se falhar, aplicação não deve iniciar (sem fallback por segurança)
 from comum.utilitarios.config_manager import get_config_manager
 
 config_manager = get_config_manager()
 db_config = config_manager.get_database_config()
 
-if db_config:
-    DATABASES = {'default': db_config}
-else:
-    # Fallback se AWS Secrets não disponível
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'wallclub',
-            'USER': 'root',
-            'PASSWORD': '',
-            'HOST': 'mysql',
-            'PORT': '3306',
-            'OPTIONS': {
-                'charset': 'utf8mb4',
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            }
-        }
-    }
+if not db_config:
+    raise RuntimeError(
+        "ERRO CRÍTICO: Não foi possível obter configurações do banco de dados do AWS Secrets Manager. "
+        "Verifique as credenciais AWS e a conexão com o Secrets Manager."
+    )
+
+DATABASES = {'default': db_config}
 
 # Cache (Redis compartilhado)
 CACHES = {
