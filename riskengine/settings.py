@@ -148,3 +148,14 @@ THREEDS_GATEWAY_URL = os.environ.get('THREEDS_GATEWAY_URL', None)
 THREEDS_MERCHANT_ID = os.environ.get('THREEDS_MERCHANT_ID', None)
 THREEDS_MERCHANT_KEY = os.environ.get('THREEDS_MERCHANT_KEY', None)
 THREEDS_TIMEOUT = int(os.environ.get('THREEDS_TIMEOUT', '30'))
+
+# Celery Configuration (Containers separados)
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', f"redis://{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', '6379')}/0")
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', f"redis://{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', '6379')}/0")
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Sao_Paulo'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutos
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000  # Restart worker após 1000 tasks

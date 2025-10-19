@@ -30,11 +30,8 @@ RUN python manage.py collectstatic --noinput || true
 # Criar diretório de logs
 RUN mkdir -p /app/logs
 
-# Copiar configuração do supervisor
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Expor porta
+# Expor porta (apenas para container riskengine)
 EXPOSE 8004
 
-# Comando de inicialização - usa supervisor para rodar Gunicorn + Celery
-CMD ["/usr/local/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Comando padrão (será sobrescrito pelo docker-compose.yml)
+CMD ["gunicorn", "riskengine.wsgi:application", "--bind", "0.0.0.0:8004", "--workers", "3", "--timeout", "120"]

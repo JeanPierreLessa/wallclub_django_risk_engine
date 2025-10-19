@@ -1,11 +1,13 @@
 version: '3.8'
 
 services:
+  # APP 4: Risk Engine - APIs REST apenas (sem Celery)
   riskengine:
     build: .
     container_name: wallclub-riskengine
     ports:
       - "8004:8004"
+    command: gunicorn riskengine.wsgi:application --bind 0.0.0.0:8004 --workers 3 --timeout 120
     environment:
       - DEBUG=False
       - SECRET_KEY=${SECRET_KEY:-change-in-production}
@@ -16,6 +18,8 @@ services:
       - DB_PORT=${DB_PORT:-3306}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - CALLBACK_URL_PRINCIPAL=${CALLBACK_URL_PRINCIPAL:-http://wallclub-prod-release300:8000}
       - NOTIFICACAO_EMAIL=${NOTIFICACAO_EMAIL:-admin@wallclub.com.br}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
@@ -29,6 +33,61 @@ services:
       - redis
     mem_limit: 512m
     cpus: 0.5
+
+  # APP 5: Celery Workers - Tasks assíncronas
+  celery-worker:
+    build: .
+    container_name: wallclub-celery-worker
+    command: celery -A riskengine worker --loglevel=info --concurrency=4
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-change-in-production}
+      - DB_NAME=${DB_NAME:-wallclub}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TZ=America/Sao_Paulo
+    networks:
+      - wallclub-network
+    restart: always
+    depends_on:
+      - mysql
+      - redis
+      - riskengine
+    mem_limit: 256m
+    cpus: 0.5
+
+  # APP 5.1: Celery Beat - Scheduler de tasks periódicas
+  celery-beat:
+    build: .
+    container_name: wallclub-celery-beat
+    command: celery -A riskengine beat --loglevel=info
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-change-in-production}
+      - DB_NAME=${DB_NAME:-wallclub}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TZ=America/Sao_Paulo
+    networks:
+      - wallclub-network
+    restart: always
+    depends_on:
+      - redis
+      - celery-worker
+    mem_limit: 128m
+    cpus: 0.25
 
 networks:
   wallclub-network:
