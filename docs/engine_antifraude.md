@@ -384,6 +384,125 @@ def callback_antifraude(request):
 
 ---
 
+### 3. Integração Checkout Web - Link de Pagamento (✅ 22/10/2025)
+
+```python
+# No checkout/link_pagamento_web/services.py
+from checkout.services_antifraude import CheckoutAntifraudeService
+
+def processar_checkout_link_pagamento(
+    token: str,
+    dados_cartao: Dict[str, Any],
+    dados_sessao: Dict[str, Any],
+    ip_address: str,
+    user_agent: str
+) -> Dict[str, Any]:
+    # ... validações iniciais ...
+    
+    # ========================================
+    # ANÁLISE ANTIFRAUDE (RISK ENGINE)
+    # ========================================
+    permitir, resultado_antifraude = CheckoutAntifraudeService.analisar_transacao(
+        cpf=session.cpf,
+        valor=valor_final,
+        modalidade=session.tipo_pagamento,
+        parcelas=session.parcelas,
+        loja_id=token_obj.loja_id,
+        canal_id=token_obj.canal_id,
+        numero_cartao=numero_cartao,
+        bandeira=dados_cartao.get('bandeira'),
+        ip_address=ip_address,
+        user_agent=user_agent,
+        device_fingerprint=dados_sessao.get('device_fingerprint'),
+        cliente_nome=session.nome,
+        transaction_id=f"CHECKOUT-{token}"
+    )
+    
+    # Salvar resultado na transação
+    transacao.score_risco = resultado_antifraude.get('score_risco', 0)
+    transacao.decisao_antifraude = resultado_antifraude.get('decisao', 'APROVADO')
+    transacao.motivo_bloqueio = resultado_antifraude.get('motivo', '')
+    transacao.antifraude_response = resultado_antifraude
+    
+    # Tratar REPROVADO
+    if not permitir or resultado_antifraude.get('decisao') == 'REPROVADO':
+        transacao.status = 'BLOQUEADA_ANTIFRAUDE'
+        transacao.save()
+        
+        return {
+            'sucesso': False,
+            'mensagem': 'Transação bloqueada por segurança. Entre em contato com o vendedor.'
+        }
+    
+    # Tratar REVISAR (processar mas marcar)
+    if resultado_antifraude.get('decisao') == 'REVISAR':
+        transacao.status = 'PENDENTE_REVISAO'
+    
+    # Continuar processamento no Pinbank
+    resultado_transacao = transacoes_service.efetuar_transacao_cartao(dados_transacao)
+    # ...
+```
+
+**Campos Adicionados no Model (checkout_transactions):**
+```python
+class CheckoutTransaction(models.Model):
+    # ... campos existentes ...
+    
+    # Antifraude (Risk Engine)
+    score_risco = models.IntegerField(null=True, blank=True)  # 0-100
+    decisao_antifraude = models.CharField(max_length=20, null=True)  # APROVADO/REPROVADO/REVISAR
+    motivo_bloqueio = models.TextField(null=True, blank=True)
+    antifraude_response = models.JSONField(null=True, blank=True)
+    revisado_por = models.BigIntegerField(null=True, blank=True)
+    revisado_em = models.DateTimeField(null=True, blank=True)
+    observacao_revisao = models.TextField(null=True, blank=True)
+    
+    # Status
+    STATUS_CHOICES = [
+        # ... status existentes ...
+        ('BLOQUEADA_ANTIFRAUDE', 'Bloqueada pelo Antifraude'),
+        ('PENDENTE_REVISAO', 'Pendente de Revisão Manual'),
+    ]
+```
+
+**SQL Migration:**
+```sql
+-- scripts/sql/adicionar_campos_antifraude_checkout.sql
+ALTER TABLE checkout_transactions 
+MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'PENDENTE';
+
+ALTER TABLE checkout_transactions
+ADD COLUMN score_risco INT NULL,
+ADD COLUMN decisao_antifraude VARCHAR(20) NULL,
+ADD COLUMN motivo_bloqueio TEXT NULL,
+ADD COLUMN antifraude_response JSON NULL,
+ADD COLUMN revisado_por BIGINT NULL,
+ADD COLUMN revisado_em DATETIME NULL,
+ADD COLUMN observacao_revisao TEXT NULL;
+
+CREATE INDEX idx_score_risco ON checkout_transactions(score_risco);
+CREATE INDEX idx_decisao_antifraude ON checkout_transactions(decisao_antifraude);
+```
+
+**Fluxo Completo:**
+```
+Cliente → Link Pagamento → Preenche Cartão → Envia
+                                              ↓
+                                    Risk Engine Analisa
+                                              ↓
+                            ┌─────────┬─────────┐
+                            │           │           │
+                        APROVADO    REVISAR    REPROVADO
+                            │           │           │
+                      Processa  Processa+  Bloqueia
+                       Pinbank   Notifica   Imediato
+                            │    Analista      │
+                        APROVADA PENDENTE_ BLOQUEADA_
+                                 REVISAO   ANTIFRAUDE
+```
+
+---
+
 ## 📊 EXEMPLO COMPLETO PASSO A PASSO
 
 ### Situação: CPF Novo com Valor Alto

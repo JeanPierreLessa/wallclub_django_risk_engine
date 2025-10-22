@@ -246,7 +246,43 @@ else:
     origem = 'WEB'
 ```
 
-### 4. MaxMind minFraud
+### 4. Integração Checkout Web - Link de Pagamento (✅ 22/10/2025)
+
+**Arquivo Django:** `checkout/link_pagamento_web/services.py`
+
+**Interceptação:** Linha 117-183, ANTES de processar no Pinbank
+
+**Service Antifraude:** `checkout/services_antifraude.py` (268 linhas)
+
+**Fluxo de Análise:**
+```python
+# 1. Coletar dados da sessão e cartão
+# 2. Chamar CheckoutAntifraudeService.analisar_transacao()
+# 3. Salvar resultado em checkout_transactions
+# 4. Tratar decisão:
+#    - REPROVADO → Bloqueia (status='BLOQUEADA_ANTIFRAUDE')
+#    - REVISAR → Processa + marca (status='PENDENTE_REVISAO')
+#    - APROVADO → Processa normalmente
+```
+
+**Campos Salvos (checkout_transactions):**
+- `score_risco` (INT) - Score 0-100 retornado pelo Risk Engine
+- `decisao_antifraude` (VARCHAR) - APROVADO/REPROVADO/REVISAR
+- `motivo_bloqueio` (TEXT) - Motivo detalhado da decisão
+- `antifraude_response` (JSON) - Resposta completa do Risk Engine
+- `revisado_por` (BIGINT) - ID do analista (revisão manual)
+- `revisado_em` (DATETIME) - Timestamp da revisão
+- `observacao_revisao` (TEXT) - Observação do analista
+
+**Status Novos:**
+- `BLOQUEADA_ANTIFRAUDE` - Reprovado automaticamente, pagamento não processado
+- `PENDENTE_REVISAO` - Processado mas aguarda análise manual do analista
+
+**Fail-Open:** Em caso de erro/timeout no Risk Engine, a transação é APROVADA (não bloqueia operação).
+
+**SQL Migration:** `wallclub_django/scripts/sql/adicionar_campos_antifraude_checkout.sql`
+
+### 5. MaxMind minFraud
 
 **Cache Redis:** 1 hora (chave: `maxmind:{cpf}:{valor}:{ip}`)
 
@@ -258,7 +294,7 @@ else:
 
 **Princípio:** Sistema NUNCA bloqueia por falha técnica.
 
-### 5. 3D Secure 2.0
+### 6. 3D Secure 2.0
 
 **Regras de Recomendação:**
 - Score > 60: **Sempre usa 3DS**

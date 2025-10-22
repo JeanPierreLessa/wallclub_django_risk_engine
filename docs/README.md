@@ -136,21 +136,39 @@ Score final (0-100)
 6. Retornar comprovante
 ```
 
-### Checkout Web ✅
-**Arquivo:** `wallclub_django/checkout/services_antifraude.py` (271 linhas)
+### Checkout Web - Link de Pagamento ✅ (22/10/2025)
+**Arquivo:** `wallclub_django/checkout/services_antifraude.py` (268 linhas)
 
-**Interceptação:** Antes do Pinbank em `services.py` linha ~540
+**Interceptação:** Antes do Pinbank em `checkout/link_pagamento_web/services.py` linha 117-183
 
 **Dados enviados:**
 - CPF, valor, modalidade, parcelas
 - Número cartão, bandeira
 - IP, user_agent, device_fingerprint
-- Cliente nome, email
+- Cliente nome, transaction_id
+- Loja ID, Canal ID
 
 **Decisões:**
-- APROVADO: Continua Pinbank
-- REPROVADO: Bloqueia com mensagem "Transação bloqueada por segurança"
-- REVISAR: Processa mas marca para revisão
+- **APROVADO:** Processa normalmente no Pinbank
+- **REPROVADO:** Bloqueia imediatamente
+  - Status: `BLOQUEADA_ANTIFRAUDE`
+  - Não processa pagamento
+  - Retorna erro ao cliente
+- **REVISAR:** Processa mas marca para revisão manual
+  - Status: `PENDENTE_REVISAO`
+  - Processa no Pinbank
+  - Notifica analista
+
+**Campos no Modelo (checkout_transactions):**
+- `score_risco` - Score 0-100
+- `decisao_antifraude` - APROVADO/REPROVADO/REVISAR
+- `motivo_bloqueio` - Motivo da decisão
+- `antifraude_response` - Resposta completa JSON
+- `revisado_por` - ID do analista
+- `revisado_em` - Data/hora da revisão
+- `observacao_revisao` - Observação do analista
+
+**SQL Migration:** `scripts/sql/adicionar_campos_antifraude_checkout.sql`
 
 ### Portal Admin (Revisão Manual) ✅
 **Arquivos:** `wallclub_django/portais/admin/views_antifraude.py`
@@ -789,7 +807,11 @@ docker exec wallclub-riskengine python manage.py shell
 
 **Integrações ativas:**
 - ✅ POSP2 (Terminal POS)
-- ✅ Checkout Web
+- ✅ Checkout Web - Link de Pagamento (22/10/2025)
+  - 7 campos antifraude em checkout_transactions
+  - 2 status novos: BLOQUEADA_ANTIFRAUDE, PENDENTE_REVISAO
+  - Interceptação linha 117-183 antes do Pinbank
+  - Fail-open implementado
 - ✅ Portal Admin (revisão manual + segurança)
 - ✅ OAuth 2.0 entre containers
 - ✅ MaxMind minFraud (credenciais ativas)
