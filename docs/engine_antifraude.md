@@ -1,8 +1,13 @@
 # 🛡️ WALLCLUB RISK ENGINE - MOTOR ANTIFRAUDE
 
-**Versão:** 1.0  
-**Data:** 16/10/2025  
+**Versão:** 1.1  
+**Data:** 23/10/2025  
 **Container:** Separado (porta 8004)
+
+**Atualizações Recentes (23/10):**
+- Campo `transacao_id` aceito diretamente na normalização WEB
+- OAuth 2.0 entre containers validado
+- Integração completa com Checkout Web (Link de Pagamento)
 
 ---
 

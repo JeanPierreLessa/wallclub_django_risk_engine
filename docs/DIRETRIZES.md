@@ -1,8 +1,13 @@
 # WALLCLUB RISK ENGINE - DIRETRIZES DE DESENVOLVIMENTO
 
-**Versão:** 1.1  
-**Data:** 18/10/2025  
+**Versão:** 1.2  
+**Data:** 23/10/2025  
 **Status:** Container isolado + Sistema de Segurança Multi-Portal operacional em produção
+
+**Atualizações Recentes (23/10):**
+- ✅ Campo `transacao_id` aceito diretamente na normalização WEB
+- ✅ Integração completa com Checkout Web (Link de Pagamento)
+- ✅ OAuth 2.0 entre containers validado em produção
 
 ---
 
