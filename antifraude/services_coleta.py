@@ -195,8 +195,8 @@ class ColetaDadosService:
         Returns:
             Dict normalizado para TransacaoRisco
         """
-        # Web pode usar order_id ou token como ID
-        transacao_id = dados.get('order_id') or dados.get('token') or dados.get('nsu', '')
+        # Web pode usar transacao_id direto, ou order_id, token, nsu
+        transacao_id = dados.get('transacao_id') or dados.get('order_id') or dados.get('token') or dados.get('nsu', '')
         
         return {
             'transacao_id': transacao_id,
