@@ -245,9 +245,21 @@ Decisão:
 ### 3. Normalização de Dados
 
 **Origens suportadas:**
-- **POS:** Terminal físico (NSU + terminal)
-- **APP:** Mobile (transaction_id + device_fingerprint)
-- **WEB:** Checkout (order_id + IP + user_agent)
+- **POS:** Terminal físico (NSU como transacao_id)
+- **APP:** Mobile (order_id + device_fingerprint)
+- **WEB:** Checkout (checkout_transactions.id como transacao_id)
+
+**transaction_id por origem (30/10/2025):**
+```python
+# POS
+'transacao_id': dados.get('nsu')  # Exemplo: "156311526"
+
+# WEB (Checkout)
+'transacao_id': str(transacao.id)  # Exemplo: "19" (checkout_transactions.id)
+
+# APP
+'transacao_id': dados.get('order_id')  # Definido pelo app
+```
 
 **Detecção automática:**
 ```python
@@ -260,13 +272,19 @@ else:
     origem = 'WEB'
 ```
 
-### 4. Integração Checkout Web - Link de Pagamento (✅ 22/10/2025)
+### 4. Integração Checkout Web - Link de Pagamento (✅ 22/10/2025 + Atualização 30/10)
 
 **Arquivo Django:** `checkout/link_pagamento_web/services.py`
 
 **Interceptação:** Linha 117-183, ANTES de processar no Pinbank
 
 **Service Antifraude:** `checkout/services_antifraude.py` (268 linhas)
+
+**transaction_id:** Usa `checkout_transactions.id` (ID numérico da tabela)
+```python
+# Linha 146 de services.py
+transaction_id=str(transacao.id)  # Exemplo: "19"
+```
 
 **Fluxo de Análise:**
 ```python

@@ -2,9 +2,9 @@
 
 **Sistema de análise antifraude em tempo real para fintech - Container Django isolado**
 
-**Versão:** 1.2  
+**Versão:** 1.3  
 **Status:** ✅ Operacional em produção desde 16/10/2025  
-**Última atualização:** 23/10/2025 (Integração Checkout Web completa)
+**Última atualização:** 30/10/2025 (transaction_id normalizado + Checkout 2FA)
 
 ---
 
@@ -25,7 +25,8 @@ O **WallClub Risk Engine** é um sistema independente de análise de risco que o
 - ✅ Middleware de validação de login em tempo real
 - ✅ Fail-open em caso de erro (segurança operacional)
 - ✅ Integração Checkout Web (Link de Pagamento) - 23/10/2025
-- ✅ Normalização `transacao_id` direto em dados WEB
+- ✅ Normalização `transacao_id` por origem: POS=NSU, WEB=checkout_transactions.id - 30/10/2025
+- ✅ Sistema de telefone 2FA integrado (autogerenciamento + inativação automática)
 
 ---
 
