@@ -91,6 +91,10 @@ Score final (0-100)
 | 3 | Dispositivo Novo | DISPOSITIVO | 5 | +50 | ALERTAR |
 | 4 | Horário Incomum | HORARIO | 4 | +40 | ALERTAR |
 | 5 | IP Suspeito | LOCALIZACAO | 9 | +90 | REVISAR |
+| 6 | Dispositivo Novo - Alto Valor | DISPOSITIVO | 7 | +70 | REVISAR |
+| 7 | IP Novo + Histórico Bloqueios | LOCALIZACAO | 8 | +80 | REVISAR |
+| 8 | Múltiplas Tentativas Falhas | CUSTOM | 6 | +60 | REVISAR |
+| 9 | Cliente com Bloqueio Recente | CUSTOM | 9 | +90 | REVISAR |
 
 **Cálculo:** `score += peso * 10`
 
@@ -171,6 +175,45 @@ Score final (0-100)
 - `observacao_revisao` - Observação do analista
 
 **SQL Migration:** `scripts/sql/adicionar_campos_antifraude_checkout.sql`
+
+### Autenticação Cliente ✅ (30/10/2025)
+**Arquivo:** `wallclub_django/apps/cliente/services_autenticacao_analise.py`, `wallclub_django/apps/cliente/views_autenticacao_analise.py`
+
+**Endpoint Django:** `GET /cliente/api/v1/autenticacao/analise/<cpf>/`
+
+**Autenticação:** OAuth 2.0 exclusivo (`@require_oauth_riskengine`)
+
+**Service Risk Engine:** `antifraude/services_cliente_auth.py` (ClienteAutenticacaoService)
+
+**Dados retornados:**
+- Status atual (bloqueado, tentativas login)
+- Histórico 24h (taxa falha, IPs distintos, devices)
+- Dispositivos conhecidos (confiáveis ou não)
+- Bloqueios histórico (30 dias)
+- **9 flags de risco** (conta bloqueada, bloqueio recente, múltiplos bloqueios, alta taxa falha, etc)
+
+**Score de Autenticação (0-50 pontos):**
+- Conta bloqueada: +30
+- Bloqueio recente (7 dias): +20
+- Múltiplos bloqueios (2+ em 30 dias): +15
+- Alta taxa falha (≥30%): +15
+- Múltiplas tentativas falhas (5+ em 24h): +10
+- Múltiplos IPs (3+ em 24h): +10
+- Múltiplos devices (2+ em 24h): +10
+- Todos devices novos (<7 dias): +10
+- Nenhum device confiável (10+ logins): +5
+
+**Integração AnaliseRiscoService:**
+- Score de autenticação somado ao score total
+- Fail-safe: erro na consulta = score 0 (não penaliza)
+- Timeout configurável (2s padrão)
+- Configurações centralizadas via `ConfiguracaoAntifraude`
+
+**4 Novas Regras Criadas:**
+1. Dispositivo Novo + Alto Valor (peso 7)
+2. IP Novo + Histórico Bloqueios (peso 8)
+3. Múltiplas Tentativas Falhas (peso 6)
+4. Cliente com Bloqueio Recente (peso 9)
 
 ### Portal Admin (Revisão Manual) ✅
 **Arquivos:** `wallclub_django/portais/admin/views_antifraude.py`
@@ -802,9 +845,9 @@ docker exec wallclub-riskengine python manage.py shell
 
 ## 📝 Status do Projeto
 
-**Versão atual:** 1.1  
+**Versão atual:** 1.3  
 **Data de lançamento:** 16/10/2025  
-**Última atualização:** 18/10/2025 (Sistema de Segurança Multi-Portal)  
+**Última atualização:** 30/10/2025 (Integração Autenticação Cliente + Configurações Centralizadas)  
 **Status:** ✅ Operacional em produção  
 
 **Integrações ativas:**
@@ -814,6 +857,12 @@ docker exec wallclub-riskengine python manage.py shell
   - 2 status novos: BLOQUEADA_ANTIFRAUDE, PENDENTE_REVISAO
   - Interceptação linha 117-183 antes do Pinbank
   - Fail-open implementado
+- ✅ Autenticação Cliente (30/10/2025)
+  - Endpoint OAuth exclusivo: GET /cliente/api/v1/autenticacao/analise/<cpf>/
+  - Score 0-50 pontos baseado em comportamento (9 flags)
+  - 4 regras novas: dispositivo novo, IP novo, tentativas falhas, bloqueio recente
+  - Configurações centralizadas (29 parâmetros sem hardcode)
+  - Integrado ao AnaliseRiscoService
 - ✅ Portal Admin (revisão manual + segurança)
 - ✅ OAuth 2.0 entre containers
 - ✅ MaxMind minFraud (credenciais ativas)

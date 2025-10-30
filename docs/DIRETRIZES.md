@@ -51,10 +51,12 @@ wallclub-riskengine/
 ├── antifraude/                # Sistema antifraude
 │   ├── models.py              # TransacaoRisco, RegraAntifraude, DecisaoAntifraude
 │   │                          # BloqueioSeguranca, AtividadeSuspeita (Semana 23)
-│   ├── services.py            # AnaliseRiscoService (5 regras básicas)
+│   ├── models_config.py       # ConfiguracaoAntifraude, HistoricoConfiguracao (30/10)
+│   ├── services.py            # AnaliseRiscoService (9 regras + score autenticação)
 │   ├── services_coleta.py     # ColetaDadosService (normalização POS/APP/WEB)
 │   ├── services_maxmind.py    # MaxMindService (score externo + cache)
 │   ├── services_3ds.py        # Auth3DSService (3D Secure 2.0)
+│   ├── services_cliente_auth.py # ClienteAutenticacaoService (consulta Django OAuth)
 │   ├── services_notificacao.py # NotificacaoService (Email + Slack)
 │   ├── views.py               # Views legadas (manter compatibilidade)
 │   ├── views_api.py           # API REST pública (POST /analyze/)
@@ -72,13 +74,16 @@ wallclub-riskengine/
 │   ├── README.md              # Overview completo do sistema
 │   ├── DIRETRIZES.md          # Este arquivo
 │   ├── engine_antifraude.md   # Funcionamento do motor
+│   ├── integracao_autenticacao_fraude.md # Integração autenticação (30/10)
 │   ├── semana_8_coleta_dados.md
 │   ├── semana_9_maxmind.md
 │   ├── semana_13_3ds_api.md
 │   └── semana_23_atividades_suspeitas.md
 ├── scripts/                   # Scripts utilitários
 │   ├── testar_maxmind_producao.py
-│   └── seed_regras_antifraude.py
+│   ├── seed_regras_antifraude.py
+│   ├── seed_configuracoes_antifraude.py  # 29 configs (30/10)
+│   └── seed_regras_autenticacao.py       # 4 regras auth (30/10)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
@@ -221,7 +226,7 @@ Decisão:
 
 **Exceção:** Se alguma regra tem `acao=REPROVAR` → REPROVADO (independente do score)
 
-### 2. Regras Antifraude (5 básicas)
+### 2. Regras Antifraude (9 regras)
 
 | # | Nome | Tipo | Peso | Ação | Pontos |
 |---|------|------|------|------|--------|
@@ -230,6 +235,10 @@ Decisão:
 | 3 | Dispositivo Novo | DISPOSITIVO | 5 | ALERTAR | +50 |
 | 4 | Horário Incomum | HORARIO | 4 | ALERTAR | +40 |
 | 5 | IP Suspeito | LOCALIZACAO | 9 | REVISAR | +90 |
+| 6 | Dispositivo Novo - Alto Valor | DISPOSITIVO | 7 | REVISAR | +70 |
+| 7 | IP Novo + Histórico Bloqueios | LOCALIZACAO | 8 | REVISAR | +80 |
+| 8 | Múltiplas Tentativas Falhas | CUSTOM | 6 | REVISAR | +60 |
+| 9 | Cliente com Bloqueio Recente | CUSTOM | 9 | REVISAR | +90 |
 
 **Cálculo:** `score += peso * 10`
 
@@ -869,6 +878,6 @@ docker exec wallclub-riskengine mysql -h mysql -u root -p -e "SHOW PROCESSLIST;"
 ---
 
 **Documentação:** `/docs/`  
-**Última atualização:** 18/10/2025  
-**Versão:** 1.1 (com Sistema de Segurança Multi-Portal)  
+**Última atualização:** 30/10/2025  
+**Versão:** 1.3 (com Integração Autenticação + Configurações Centralizadas)  
 **Responsável:** Jean Lessa + Claude AI

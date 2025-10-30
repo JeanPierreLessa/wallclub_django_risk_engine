@@ -79,9 +79,13 @@ class ColetaDadosService:
             'CREDITO': 'CREDITO',
             'CRÉDITO': 'CREDITO',
             'CREDIT': 'CREDITO',
+            'CREDIT_ONE_INSTALLMENT': 'CREDITO',  # Pinbank: crédito à vista
+            'CREDIT_TWO_INSTALLMENTS': 'PARCELADO',  # Pinbank: parcelado 2x
+            'CREDIT_WITH_INSTALLMENTS': 'PARCELADO',  # Pinbank: parcelado 3x+
             'DEBITO': 'DEBITO',
             'DÉBITO': 'DEBITO',
             'DEBIT': 'DEBITO',
+            'DEBIT_CARD': 'DEBITO',  # Pinbank: débito
             'PARCELADO': 'PARCELADO',
             'INSTALLMENT': 'PARCELADO',
         }
