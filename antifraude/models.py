@@ -386,3 +386,7 @@ class WhitelistAntifraude(models.Model):
         status = "✅" if self.is_active else "⚪"
         origem_emoji = {"MANUAL": "👤", "AUTO": "🤖", "CLIENTE_VIP": "⭐"}.get(self.origem, "")
         return f"{status}{origem_emoji} {self.tipo}: {self.valor}"
+
+
+# Importar modelos de configuração
+from .models_config import ConfiguracaoAntifraude, HistoricoConfiguracao

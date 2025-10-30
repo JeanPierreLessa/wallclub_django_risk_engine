@@ -262,12 +262,17 @@ class AnaliseRiscoService:
             return decisao
         
         # VERIFICAR WHITELIST (reduz score base)
+        from .models_config import ConfiguracaoAntifraude
+        
         whitelists = AnaliseRiscoService._verificar_whitelist(transacao)
         desconto_whitelist = 0
         
         if whitelists:
-            # Cada whitelist reduz 20 pontos (máximo -40)
-            desconto_whitelist = min(len(whitelists) * 20, 40)
+            # Buscar configurações de whitelist
+            desconto_por_item = ConfiguracaoAntifraude.get_config('SCORE_DESCONTO_WHITELIST', 20)
+            desconto_max = ConfiguracaoAntifraude.get_config('SCORE_DESCONTO_MAX_WHITELIST', 40)
+            
+            desconto_whitelist = min(len(whitelists) * desconto_por_item, desconto_max)
             registrar_log(
                 'antifraude.whitelist',
                 f"Whitelist encontrada: {transacao.transacao_id} - Desconto: -{desconto_whitelist} pontos"
@@ -298,17 +303,7 @@ class AnaliseRiscoService:
             f"MaxMind score: {score_total} (fonte: {resultado_maxmind['fonte']}) - {resultado_maxmind['tempo_consulta_ms']}ms"
         )
         
-        # 2. Aplicar desconto de whitelist no score base
-        if desconto_whitelist > 0:
-            score_total = max(0, score_total - desconto_whitelist)
-            registrar_log(
-                'antifraude.whitelist',
-                f"Score ajustado: {score_total} (desconto de {desconto_whitelist} pontos)"
-            )
-        
-        # 3. Buscar regras ativas ordenadas por prioridade
-        regras = RegraAntifraude.objects.filter(is_active=True).order_by('prioridade')
-        
+        # Inicializar lista de regras acionadas e motivos
         regras_acionadas = [{
             'nome': 'MaxMind minFraud',
             'tipo': 'SCORE_EXTERNO',
@@ -316,9 +311,11 @@ class AnaliseRiscoService:
             'acao': 'ALERTAR',
             'detalhes': resultado_maxmind['detalhes']
         }]
+        motivos = [f"Score MaxMind: {resultado_maxmind['score']} ({resultado_maxmind['fonte']})"]
         
-        # Adicionar whitelist às regras acionadas se houver
-        if whitelists:
+        # 2. Aplicar desconto de whitelist no score base
+        if desconto_whitelist > 0:
+            score_total = max(0, score_total - desconto_whitelist)
             regras_acionadas.append({
                 'nome': 'Whitelist',
                 'tipo': 'WHITELIST',
@@ -326,10 +323,43 @@ class AnaliseRiscoService:
                 'acao': 'APROVAR',
                 'detalhes': whitelists
             })
-        
-        motivos = [f"Score MaxMind: {resultado_maxmind['score']} ({resultado_maxmind['fonte']})"]
-        if desconto_whitelist > 0:
             motivos.append(f"Whitelist: -{desconto_whitelist} pontos")
+            registrar_log(
+                'antifraude.whitelist',
+                f"Score ajustado: {score_total} (desconto de {desconto_whitelist} pontos)"
+            )
+        
+        # 2.5. ENRIQUECER COM DADOS DE AUTENTICAÇÃO
+        from .services_cliente_auth import ClienteAutenticacaoService
+        
+        dados_auth = ClienteAutenticacaoService.consultar_historico_autenticacao(
+            cpf=transacao.cpf,
+            canal_id=transacao.canal_id
+        )
+        
+        score_auth = ClienteAutenticacaoService.calcular_score_autenticacao(dados_auth)
+        
+        if score_auth > 0:
+            score_total += score_auth
+            regras_acionadas.append({
+                'nome': 'Análise de Autenticação',
+                'tipo': 'AUTENTICACAO',
+                'peso': score_auth,
+                'acao': 'ALERTAR' if score_auth < 30 else 'REVISAR',
+                'detalhes': {
+                    'flags_risco': dados_auth.get('flags_risco', []),
+                    'bloqueado': dados_auth.get('status_autenticacao', {}).get('bloqueado', False),
+                    'tentativas_falhas_24h': dados_auth.get('historico_recente', {}).get('tentativas_falhas', 0)
+                }
+            })
+            motivos.append(f"Score autenticação: +{score_auth} pontos")
+            registrar_log(
+                'antifraude.autenticacao',
+                f"Score autenticação: +{score_auth} - Flags: {len(dados_auth.get('flags_risco', []))}"
+            )
+        
+        # 3. Buscar regras ativas ordenadas por prioridade
+        regras = RegraAntifraude.objects.filter(is_active=True).order_by('prioridade')
         decisao_final = 'APROVADO'
         
         # 3. Executar regras internas (ajustam score MaxMind)
@@ -359,13 +389,19 @@ class AnaliseRiscoService:
         # 4. Limitar score a 100
         score_total = min(score_total, 100)
         
-        # 5. Decisão final baseada em thresholds
-        if score_total >= 80 and decisao_final != 'REPROVADO':
+        # 5. Decisão final baseada em thresholds (usa configurações)
+        from .models_config import ConfiguracaoAntifraude
+        
+        limite_aprovacao = ConfiguracaoAntifraude.get_config('SCORE_LIMITE_APROVACAO_AUTO', 30)
+        limite_revisao = ConfiguracaoAntifraude.get_config('SCORE_LIMITE_REVISAO', 31)
+        limite_reprovacao = ConfiguracaoAntifraude.get_config('SCORE_LIMITE_REPROVACAO', 70)
+        
+        if score_total >= limite_reprovacao and decisao_final != 'REPROVADO':
             decisao_final = 'REPROVADO'
-            motivos.append('Score crítico (>=80)')
-        elif score_total >= 60 and decisao_final == 'APROVADO':
+            motivos.append(f'Score crítico (>={limite_reprovacao})')
+        elif score_total >= limite_revisao and decisao_final == 'APROVADO':
             decisao_final = 'REVISAO'
-            motivos.append('Score alto (>=60) - requer revisão')
+            motivos.append(f'Score alto (>={limite_revisao}) - requer revisão')
         
         # Calcular tempo de análise
         tempo_analise = int((datetime.now() - inicio).total_seconds() * 1000)
