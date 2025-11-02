@@ -7,8 +7,8 @@ Endpoints para integração externa (POSP2, Apps, Checkout)
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from comum.oauth.decorators import require_oauth_token
-from comum.decorators.api_decorators import handle_api_errors, validate_required_params
+from wallclub_core.oauth.decorators import require_oauth_token
+from wallclub_core.decorators.api_decorators import handle_api_errors, validate_required_params
 from .services_coleta import ColetaDadosService
 from .services import AnaliseRiscoService
 from .services_3ds import Auth3DSService

@@ -65,7 +65,7 @@ WSGI_APPLICATION = 'riskengine.wsgi.application'
 # Database (MySQL compartilhado com app principal via AWS Secrets)
 # OBRIGATÓRIO: Credenciais devem vir do AWS Secrets Manager
 # Se falhar, aplicação não deve iniciar (sem fallback por segurança)
-from comum.utilitarios.config_manager import get_config_manager
+from wallclub_core.utilitarios.config_manager import get_config_manager
 
 config_manager = get_config_manager()
 db_config = config_manager.get_database_config()

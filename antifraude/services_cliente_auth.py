@@ -5,7 +5,7 @@ Integração entre riskengine e wallclub_django
 import requests
 from typing import Dict, Any, Optional
 from datetime import datetime
-from comum.oauth.services import OAuthService
+from wallclub_core.oauth.services import OAuthService
 import logging
 
 logger = logging.getLogger(__name__)

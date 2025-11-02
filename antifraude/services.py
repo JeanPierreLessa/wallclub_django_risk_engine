@@ -157,7 +157,7 @@ class ColetaDadosService:
             user_agent = request.META.get('HTTP_USER_AGENT')
             
             # Gerar device fingerprint do request
-            from comum.oauth.services import OAuthService
+            from wallclub_core.oauth.services import OAuthService
             device_fingerprint = OAuthService.extract_device_fingerprint(request)
         
         return {
